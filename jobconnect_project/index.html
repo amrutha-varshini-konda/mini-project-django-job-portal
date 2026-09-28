@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobConnect Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-md p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold text-blue-600 cursor-pointer" onclick="switchTab('jobs')">JobConnect Portal</h1>
+        <div class="flex items-center space-x-4">
+            <button onclick="switchTab('jobs')" class="text-gray-700 font-medium hover:text-blue-600">Browse Jobs</button>
+            <button onclick="switchTab('applications')" class="text-gray-700 font-medium hover:text-blue-600">My Applications</button>
+            <span id="auth-status" class="text-sm text-gray-500">Checking...</span>
+            <button id="post-job-btn" onclick="openModal()" class="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 hidden">+ Post Job</button>
+            <button id="auth-btn" onclick="handleAuthAction()" class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700">Login</button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="max-w-4xl mx-auto p-6">
+        
+        <!-- JOBS TAB -->
+        <div id="jobs-section">
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="search-input" oninput="fetchJobs()" placeholder="Search jobs by title or location..." class="flex-1 p-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Job Listings</h2>
+            <div id="job-list" class="space-y-4">
+                <!-- Dynamically loaded jobs -->
+            </div>
+        </div>
+
+        <!-- MY APPLICATIONS TAB -->
+        <div id="applications-section" class="hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">My Submitted Applications</h2>
+            <div id="application-list" class="space-y-4">
+                <!-- Dynamically loaded applications -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Post Job Modal -->
+    <div id="job-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg w-full max-w-lg shadow-xl">
+            <h3 class="text-xl font-bold mb-4">Post a New Job</h3>
+            <form id="job-form" onsubmit="submitJob(event)">
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700">Job Title</label>
+                    <input type="text" id="title" required class="w-full mt-1 p-2 border rounded">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea id="description" rows="3" required class="w-full mt-1 p-2 border rounded"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700">Location</label>
+                    <input type="text" id="location" required class="w-full mt-1 p-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700">Salary</label>
+                    <input type="number" id="salary" required class="w-full mt-1 p-2 border rounded">
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal()" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">Cancel</button>
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Submit Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Apply Modal -->
+    <div id="apply-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg w-full max-w-lg shadow-xl">
+            <h3 class="text-xl font-bold mb-4">Apply for Job</h3>
+            <form id="apply-form" onsubmit="submitApplication(event)">
+                <input type="hidden" id="apply-job-id">
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700">Full Name</label>
+                    <input type="text" id="applicant-name" required class="w-full mt-1 p-2 border rounded">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700">Email</label>
+                    <input type="email" id="applicant-email" required class="w-full mt-1 p-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700">Resume Link (URL)</label>
+                    <input type="url" id="applicant-resume" placeholder="https://linkedin.com/in/yourprofile" class="w-full mt-1 p-2 border rounded">
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeApplyModal()" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">Cancel</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit Application</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            fetchJobs();
+        });
+
+        function switchTab(tab) {
+            const jobsSection = document.getElementById('jobs-section');
+            const appsSection = document.getElementById('applications-section');
+            
+            if (tab === 'jobs') {
+                jobsSection.classList.remove('hidden');
+                appsSection.classList.add('hidden');
+                fetchJobs();
+            } else {
+                jobsSection.classList.add('hidden');
+                appsSection.classList.remove('hidden');
+                fetchApplications();
+            }
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            const authStatus = document.getElementById('auth-status');
+            const authBtn = document.getElementById('auth-btn');
+            const postJobBtn = document.getElementById('post-job-btn');
+
+            if (token) {
+                authStatus.innerText = 'Authenticated';
+                authBtn.innerText = 'Logout';
+                authBtn.className = 'bg-red-600 text-white px-3 py-1.5 rounded text-sm hover:bg-red-700';
+                postJobBtn.classList.remove('hidden');
+            } else {
+                authStatus.innerText = 'Guest';
+                authBtn.innerText = 'Login';
+                authBtn.className = 'bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700';
+                postJobBtn.classList.add('hidden');
+            }
+        }
+
+        function handleAuthAction() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                alert('Logged out successfully!');
+                checkAuth();
+                fetchJobs();
+            } else {
+                window.location.href = 'login.html';
+            }
+        }
+
+        async function fetchJobs() {
+            try {
+                const response = await fetch(`${API_BASE}/jobs/`);
+                if (!response.ok) throw new Error('Failed to fetch jobs');
+                const jobs = await response.json();
+                
+                const searchQuery = document.getElementById('search-input').value.toLowerCase();
+                const jobList = document.getElementById('job-list');
+                jobList.innerHTML = '';
+
+                const appliedJobs = JSON.parse(localStorage.getItem('applied_jobs') || '[]');
+                const filteredJobs = jobs.filter(job => 
+                    job.title.toLowerCase().includes(searchQuery) || 
+                    job.location.toLowerCase().includes(searchQuery)
+                );
+
+                if (filteredJobs.length === 0) {
+                    jobList.innerHTML = '<p class="text-gray-500">No jobs found.</p>';
+                    return;
+                }
+
+                filteredJobs.forEach(job => {
+                    const hasApplied = appliedJobs.includes(job.id);
+                    const buttonHTML = hasApplied
+                        ? `<button disabled class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed h-10">Applied</button>`
+                        : `<button onclick="openApplyModal(${job.id})" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 h-10">Apply</button>`;
+
+                    jobList.innerHTML += `
+                        <div class="bg-white p-4 rounded shadow border border-gray-200 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold text-blue-600">${job.title}</h3>
+                                <p class="text-gray-700 mt-1">${job.description}</p>
+                                <div class="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                                    <span>📍 ${job.location}</span>
+                                    <span class="font-semibold text-green-600">💰 $${job.salary}</span>
+                                </div>
+                            </div>
+                            <div>${buttonHTML}</div>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+            }
+        }
+
+        async function fetchApplications() {
+            try {
+                const response = await fetch(`${API_BASE}/applications/`);
+                if (!response.ok) throw new Error('Failed to fetch applications');
+                const applications = await response.json();
+                
+                const appList = document.getElementById('application-list');
+                appList.innerHTML = '';
+
+                if (applications.length === 0) {
+                    appList.innerHTML = '<p class="text-gray-500">No applications submitted yet.</p>';
+                    return;
+                }
+
+                applications.forEach(app => {
+                    appList.innerHTML += `
+                        <div class="bg-white p-4 rounded shadow border border-gray-200">
+                            <h3 class="text-lg font-bold text-indigo-600">Applicant: ${app.applicant_name}</h3>
+                            <p class="text-gray-600 text-sm mt-1">Email: ${app.email}</p>
+                            <p class="text-gray-600 text-sm">Resume: <a href="${app.resume_link}" target="_blank" class="text-blue-500 underline">${app.resume_link || 'N/A'}</a></p>
+                            <span class="text-xs text-gray-400 mt-2 block">Applied on: ${new Date(app.applied_at).toLocaleDateString()}</span>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                console.error('Error loading applications:', error);
+            }
+        }
+
+        function openModal() { document.getElementById('job-modal').classList.remove('hidden'); }
+        function closeModal() { document.getElementById('job-modal').classList.add('hidden'); }
+        
+        function openApplyModal(jobId) {
+            document.getElementById('apply-job-id').value = jobId;
+            document.getElementById('apply-modal').classList.remove('hidden');
+        }
+        function closeApplyModal() { document.getElementById('apply-modal').classList.add('hidden'); }
+
+        async function submitJob(event) {
+            event.preventDefault();
+            const jobData = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                location: document.getElementById('location').value,
+                salary: document.getElementById('salary').value
+            };
+            const response = await fetch(`${API_BASE}/jobs/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jobData)
+            });
+            if (response.ok) {
+                alert('Job posted successfully!');
+                closeModal();
+                document.getElementById('job-form').reset();
+                fetchJobs();
+            } else {
+                alert('Failed to post job.');
+            }
+        }
+
+        async function submitApplication(event) {
+            event.preventDefault();
+            const jobId = parseInt(document.getElementById('apply-job-id').value);
+            const appData = {
+                job: jobId,
+                applicant_name: document.getElementById('applicant-name').value,
+                email: document.getElementById('applicant-email').value,
+                resume_link: document.getElementById('applicant-resume').value
+            };
+
+            const response = await fetch(`${API_BASE}/applications/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appData)
+            });
+
+            if (response.ok) {
+                alert('Application submitted successfully!');
+                
+                let appliedJobs = JSON.parse(localStorage.getItem('applied_jobs') || '[]');
+                if (!appliedJobs.includes(jobId)) {
+                    appliedJobs.push(jobId);
+                    localStorage.setItem('applied_jobs', JSON.stringify(appliedJobs));
+                }
+
+                closeApplyModal();
+                document.getElementById('apply-form').reset();
+                fetchJobs();
+            } else {
+                const err = await response.json();
+                alert('Failed: ' + JSON.stringify(err));
+            }
+        }
+    </script>
+</body>
+</html>
